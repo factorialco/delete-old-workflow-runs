@@ -98,7 +98,7 @@ async function main() {
         break;
       }
 
-      for (const workflowRun of response.data.workflow_runs) {
+      const promises = response.data.workflow_runs.map(async (workflowRun) => {
         const workflowRunLog = `${workflowRun.id} created at ${workflowRun.created_at}. Title: "${workflowRun.head_commit.message}", Author: ${workflowRun.head_commit.author.name} - ${workflowRun.head_commit.author.email}, Branch: ${workflowRun.head_branch}, Workflow: ${workflowRun.name}`;
 
         if(whatIf !== "false"){
@@ -124,7 +124,9 @@ async function main() {
         else{
           core.warning(`Something went wrong while deleting workflow "${workflowRun.head_commit.message}" with ID:${workflowRun.id}. Status code: ${status}`);
         }
-      }
+      })
+
+      await Promise.all(promises)
 
       if(whatIf !== "false"){
         parameters.page += 1
