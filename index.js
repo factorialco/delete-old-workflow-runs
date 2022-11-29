@@ -99,8 +99,20 @@ async function main() {
       }
 
       for (const workflowRun of response.data.workflow_runs) {
+        if (!workflowRun.head_commit) {
+          core.info(`Skipping workflow run ${workflowRun.id} with empty head commit.`);
+
+          continue;
+        }
+
         const title = workflowRun.head_commit.message.split("\n")[0]
         const workflowRunLog = `${workflowRun.id} created at ${workflowRun.created_at}. Title: "${title}", Author: ${workflowRun.head_commit.author.name} - ${workflowRun.head_commit.author.email}, Branch: ${workflowRun.head_branch}, Workflow: ${workflowRun.name}`;
+
+        if(process.env.GITHUB_RUN_ID == workflowRun.id){
+          core.info(`Skipping current workflow run ${workflowRun.id}.`);
+
+          continue;
+        }
 
         if(whatIf !== "false"){
           core.info(`Workflow run ${workflowRunLog}`);
