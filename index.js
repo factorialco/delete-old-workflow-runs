@@ -94,7 +94,7 @@ async function main() {
         response = await octokit.actions.listWorkflowRunsForRepo(parameters);
       }
 
-      if(response.data.workflow_runs <= 0){
+      if(!response.data.workflow_runs.length){
         break;
       }
 
