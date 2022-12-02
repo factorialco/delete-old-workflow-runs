@@ -1,12 +1,35 @@
 const { inspect } = require("util");
 const core = require("@actions/core");
 const { Octokit } = require("@octokit/action");
+const { throttling } = require("@octokit/plugin-throttling");
+
+const ThrottedOctokit = Octokit.plugin(throttling);
 
 main();
 
 async function main() {
   try {
-    const octokit = new Octokit();
+    const octokit = new ThrottedOctokit({
+      throttle: {
+        onRateLimit: (retryAfter, options, octokit, retryCount) => {
+          octokit.log.warn(
+            `Request quota exhausted for request ${options.method} ${options.url}`
+          );
+
+          if (retryCount < 1) {
+            // only retries once
+            octokit.log.info(`Retrying after ${retryAfter} seconds!`);
+            return true;
+          }
+        },
+        onSecondaryRateLimit: (retryAfter, options, octokit) => {
+          // does not retry, only logs a warning
+          octokit.log.warn(
+            `SecondaryRateLimit detected for request ${options.method} ${options.url}`
+          );
+        },
+      },
+    });
 
     let parameters = {};
     parameters.per_page = 100;
@@ -98,11 +121,11 @@ async function main() {
         break;
       }
 
-      for (const workflowRun of response.data.workflow_runs) {
+      const promises = response.data.workflow_runs.map(async (workflowRun) => {
         if (!workflowRun.head_commit) {
           core.info(`Skipping workflow run ${workflowRun.id} with empty head commit.`);
 
-          continue;
+          return;
         }
 
         const title = workflowRun.head_commit.message.split("\n")[0]
@@ -111,13 +134,13 @@ async function main() {
         if(process.env.GITHUB_RUN_ID == workflowRun.id){
           core.info(`Skipping current workflow run ${workflowRun.id}.`);
 
-          continue;
+          return;
         }
 
         if(whatIf !== "false"){
           core.info(`Workflow run ${workflowRunLog}`);
 
-          continue;
+          return;
         }
         else{
           core.info(`Deleting workflow run ${workflowRunLog}...`);
@@ -140,7 +163,9 @@ async function main() {
         } catch (error) {
           core.info(inspect(error));
         }
-      }
+      })
+
+      await Promise.all(promises)
 
       if(whatIf !== "false"){
         parameters.page += 1
